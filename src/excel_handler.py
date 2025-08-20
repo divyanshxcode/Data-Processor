@@ -39,6 +39,49 @@ def export_results(results_df, filename=None):
             worksheet.write(0, col_num, value, header_format)
             # Auto-adjust column width
             worksheet.set_column(col_num, col_num, max(len(value) + 2, 15))
+        
+        # Append summary rows: Count and Sum
+        try:
+            start_row = len(results_df) + 1  # header is row 0, data starts at row 1
+
+            # Compute counts (non-null counts) and sums (numeric only)
+            counts = results_df.count()
+            sums = results_df.select_dtypes(include=["number"]).sum()
+            
+            # Add variance calculation for numeric columns
+            variances = results_df.select_dtypes(include=["number"]).var()
+
+            label_format = workbook.add_format({'bold': True, 'border': 1, 'fg_color': '#F2F2F2'})
+            value_format = workbook.add_format({'border': 1})
+
+            # Write 'Count' row
+            worksheet.write(start_row, 0, 'Count', label_format)
+            for col_idx, col_name in enumerate(results_df.columns):
+                # write counts for every column
+                val = counts.get(col_name, "")
+                # counts should be written starting at same column position
+                worksheet.write(start_row, col_idx, val, value_format)
+
+            # Write 'Sum' row
+            worksheet.write(start_row + 1, 0, 'Sum', label_format)
+            for col_idx, col_name in enumerate(results_df.columns):
+                # only write sums for numeric columns, else leave blank
+                if col_name in sums.index:
+                    worksheet.write(start_row + 1, col_idx, sums[col_name], value_format)
+                else:
+                    worksheet.write(start_row + 1, col_idx, "", value_format)
+                    
+            # Write 'Variance' row
+            worksheet.write(start_row + 2, 0, 'Variance', label_format)
+            for col_idx, col_name in enumerate(results_df.columns):
+                # only write variance for numeric columns, else leave blank
+                if col_name in variances.index:
+                    worksheet.write(start_row + 2, col_idx, variances[col_name], value_format)
+                else:
+                    worksheet.write(start_row + 2, col_idx, "", value_format)
+        except Exception:
+            # if anything goes wrong with summary rows, skip silently
+            pass
     
     # Reset buffer position
     output.seek(0)
