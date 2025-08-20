@@ -1,3 +1,4 @@
+import pandas as pd
 def apply_filters(df, selected_columns, thresholds):
     filtered_df = df.copy()
     
