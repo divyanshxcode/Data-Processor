@@ -6,6 +6,7 @@ from datetime import datetime, date
 from data_processor import load_and_process_data
 from analysis_engine import analyze_data_combinations, is_date_column, get_date_columns
 from excel_handler import export_results
+from similarity_utils import add_similarity_columns
 
 
 
@@ -75,29 +76,99 @@ def add_similarity_columns(df: pd.DataFrame, group_by_cols: list, sum_cols: list
     return df
 
 
-st.set_page_config(page_title="Data Analysis Tool", layout="wide")
-st.title("IFA Testing Pipeline")
+st.set_page_config(
+    page_title="Data Analysis Tool", 
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Custom CSS for blue/white minimal theme
+st.markdown("""
+<style>
+    .main-header {
+        color: #2563eb;
+        font-size: 2.5rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        border-bottom: 3px solid #60a5fa;
+        padding-bottom: 0.5rem;
+    }
+    .section-header {
+        color: #1d4ed8;
+        font-size: 1.5rem;
+        font-weight: 500;
+        margin: 2rem 0 1rem 0;
+    }
+    .info-box {
+        background-color: #f0f9ff;
+        border-left: 4px solid #60a5fa;
+        padding: 1rem;
+        margin: 1rem 0;
+        border-radius: 0.25rem;
+    }
+    .metric-container {
+        background-color: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 0.375rem;
+        padding: 0.75rem;
+        margin: 0.25rem;
+    }
+    .stButton > button {
+        background-color: #ffffff;
+        color: #1f2937;
+        border: 2px solid #d1d5db;
+        border-radius: 0.375rem;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+    .stButton > button:hover {
+        background-color: #f3f4f6;
+        border-color: #9ca3af;
+        color: #111827;
+    }
+    .stButton > button[kind="primary"] {
+        background-color: #2563eb;
+        color: white;
+        border: 2px solid #2563eb;
+    }
+    .stButton > button[kind="primary"]:hover {
+        background-color: #1d4ed8;
+        border-color: #1d4ed8;
+    }
+    .stButton > button[kind="secondary"] {
+        background-color: #6b7280;
+        color: white;
+        border: 2px solid #6b7280;
+    }
+    .stButton > button[kind="secondary"]:hover {
+        background-color: #4b5563;
+        border-color: #4b5563;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<h1 class="main-header">Data Analysis Tool</h1>', unsafe_allow_html=True)
 
 # Upload data
-st.header("Upload Excel Data")
-uploaded_file = st.file_uploader("Choose an Excel file", type=["xlsx", "xls"])
+st.markdown('<h2 class="section-header">Data Upload</h2>', unsafe_allow_html=True)
+uploaded_file = st.file_uploader("Select Excel file", type=["xlsx", "xls"])
 
 if uploaded_file:
     df = load_and_process_data(uploaded_file)
-    st.success(f"Loaded {len(df)} rows and {len(df.columns)} columns.")
+    st.success(f"Successfully loaded {len(df)} rows and {len(df.columns)} columns")
     
     # Select columns for analysis
-    st.header("Select Columns for Analysis")
+    st.markdown('<h2 class="section-header">Column Selection</h2>', unsafe_allow_html=True)
     
     # Show column types for user reference
-    with st.expander("📊 Column Type Information"):
+    with st.expander("Column Type Reference"):
         date_cols = get_date_columns(df)
         numeric_cols = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
         categorical_cols = [col for col in df.columns if col not in date_cols and col not in numeric_cols]
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.write("**📅 Date Columns:**")
+            st.write("**Date Columns:**")
             if date_cols:
                 for col in date_cols:
                     st.write(f"• {col}")
@@ -105,7 +176,7 @@ if uploaded_file:
                 st.write("None detected")
                 
         with col2:
-            st.write("**🔢 Numeric Columns:**")
+            st.write("**Numeric Columns:**")
             if numeric_cols:
                 for col in numeric_cols[:10]:  # Show first 10
                     st.write(f"• {col}")
@@ -115,7 +186,7 @@ if uploaded_file:
                 st.write("None detected")
                 
         with col3:
-            st.write("**📝 Categorical Columns:**")
+            st.write("**Categorical Columns:**")
             if categorical_cols:
                 for col in categorical_cols[:10]:  # Show first 10
                     st.write(f"• {col}")
@@ -125,15 +196,15 @@ if uploaded_file:
                 st.write("None detected")
     
     columns = df.columns.tolist()
-    selected_columns = st.multiselect("Select columns for filtering", columns)
+    selected_columns = st.multiselect("Select columns for analysis", columns)
     
 
     if selected_columns:
-        st.header("Column Statistics & Threshold Settings")
+        st.markdown('<h2 class="section-header">Statistical Analysis & Threshold Configuration</h2>', unsafe_allow_html=True)
         thresholds = {}
         
         for col in selected_columns:
-            with st.expander(f"{col} - Statistics & Settings"):
+            with st.expander(f"Configure {col}"):
                 col_data = df[col].dropna()
                 
                 # Check if column is date/datetime
@@ -150,7 +221,7 @@ if uploaded_file:
                     
                     # Date filtering options
                     date_filter_type = st.selectbox(
-                        f"Date filter type for {col}",
+                        f"Date filter method for {col}",
                         ["Range", "Before", "After", "On"],
                         key=f"date_filter_type_{col}"
                     )
@@ -175,7 +246,7 @@ if uploaded_file:
                             )
                         
                         if start_date <= end_date:
-                            st.info(f"Date range: {start_date} to {end_date}")
+                            st.info(f"Selected range: {start_date} to {end_date}")
                             thresholds[col] = {
                                 "type": "range", 
                                 "start_date": start_date, 
@@ -192,7 +263,7 @@ if uploaded_file:
                             max_value=max_date.date(),
                             key=f"before_date_{col}"
                         )
-                        st.info(f"Filter: Before {selected_date}")
+                        st.info(f"Filter applied: Before {selected_date}")
                         thresholds[col] = {"type": "before", "date": selected_date}
                         
                     elif date_filter_type == "After":
@@ -203,7 +274,7 @@ if uploaded_file:
                             max_value=max_date.date(),
                             key=f"after_date_{col}"
                         )
-                        st.info(f"Filter: After {selected_date}")
+                        st.info(f"Filter applied: After {selected_date}")
                         thresholds[col] = {"type": "after", "date": selected_date}
                         
                     else:  # On
@@ -214,14 +285,14 @@ if uploaded_file:
                             max_value=max_date.date(),
                             key=f"on_date_{col}"
                         )
-                        st.info(f"Filter: On {selected_date}")
+                        st.info(f"Filter applied: On {selected_date}")
                         thresholds[col] = {"type": "on", "date": selected_date}
                 
                 # Check if column is numeric or categorical
 
                 elif pd.api.types.is_numeric_dtype(col_data):
                     # Show statistics for numeric columns
-                    col1, col2, col3, col4 = st.columns(4)
+                    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
                     with col1:
                         st.metric("Min", f"{col_data.min():.2f}")
                     with col2:
@@ -241,7 +312,7 @@ if uploaded_file:
 
                     # Threshold selection
                     threshold_type = st.selectbox(
-                        f"Threshold type for {col}",
+                        f"Threshold method for {col}",
 
                         ["Mean", "Median", "Custom", "Greater Than", "Less Than", "Range"],
                         key=f"threshold_type_{col}"
@@ -249,12 +320,12 @@ if uploaded_file:
                     
                     if threshold_type == "Mean":
                         threshold_value = col_data.mean()
-                        st.info(f"Selected threshold: {threshold_value:.2f}")
+                        st.info(f"Threshold value: {threshold_value:.2f}")
                         thresholds[col] = {"type": "mean", "value": threshold_value}
                     elif threshold_type == "Median":
                         threshold_value = col_data.median()
 
-                        st.info(f"Selected threshold: {threshold_value:.2f}")
+                        st.info(f"Threshold value: {threshold_value:.2f}")
                         thresholds[col] = {"type": "median", "value": threshold_value}
                     elif threshold_type == "Custom":
 
@@ -265,7 +336,7 @@ if uploaded_file:
                             value=float(col_data.mean()),
                             key=f"custom_threshold_{col}"
                         )
-                        st.info(f"Selected threshold: {threshold_value:.2f}")
+                        st.info(f"Threshold value: {threshold_value:.2f}")
                         thresholds[col] = {"type": "custom", "value": threshold_value}
                     elif threshold_type == "Greater Than":
                         threshold_value = st.number_input(
@@ -275,7 +346,7 @@ if uploaded_file:
                             value=float(col_data.mean()),
                             key=f"greater_than_{col}"
                         )
-                        st.info(f"Filter: > {threshold_value:.2f}")
+                        st.info(f"Filter applied: > {threshold_value:.2f}")
                         thresholds[col] = {"type": "greater_than", "value": threshold_value}
                     elif threshold_type == "Less Than":
                         threshold_value = st.number_input(
@@ -285,7 +356,7 @@ if uploaded_file:
                             value=float(col_data.mean()),
                             key=f"less_than_{col}"
                         )
-                        st.info(f"Filter: < {threshold_value:.2f}")
+                        st.info(f"Filter applied: < {threshold_value:.2f}")
                         thresholds[col] = {"type": "less_than", "value": threshold_value}
                     else:  # Range
                         num_divisions = st.number_input(
@@ -310,7 +381,7 @@ if uploaded_file:
                                 end = min_val + ((i + 1) * range_size)
                             ranges.append((start, end))
                         
-                        st.info(f"Created {num_divisions} ranges:")
+                        st.info(f"Generated {num_divisions} ranges:")
                         for i, (start, end) in enumerate(ranges):
                             st.write(f"Range {i+1}: {start:.2f} to {end:.2f}")
                         
@@ -324,13 +395,13 @@ if uploaded_file:
                     
                     st.write("**Unique Values:**")
                     st.write(f"Total unique: {len(unique_values)}")
-                    st.write("**Most Common Values:**")
+                    st.write("**Value Distribution:**")
                     st.dataframe(value_counts.head(10))
-                    st.write(f"**Mode (Most Frequent):** {mode_value}")
+                    st.write(f"**Most Frequent Value:** {mode_value}")
                     
                     # Selection method for categorical data
                     selection_method = st.selectbox(
-                        f"Selection method for {col}",
+                        f"Value selection method for {col}",
                         ["Select Specific Values", "Select All Values", "Select Top N Values"],
                         key=f"selection_method_{col}"
                     )
@@ -368,7 +439,7 @@ if uploaded_file:
                         value_groups.append(unique_values.tolist())
                         
                         thresholds[col] = {"type": "categorical", "value_groups": value_groups}
-                        st.info(f"Will analyze all {len(unique_values)} values individually and combined")
+                        st.info(f"Analyzing all {len(unique_values)} values individually and combined")
                     
                     else:  # Select Top N Values
                         top_n = st.number_input(
@@ -393,71 +464,46 @@ if uploaded_file:
                         thresholds[col] = {"type": "categorical", "value_groups": value_groups}
 
         # Step 4: Select ID column and result columns
-        st.header("4) Select ID Column & Result Columns")
+        st.markdown('<h2 class="section-header">Output Configuration</h2>', unsafe_allow_html=True)
         
         # ID column selection
-        id_column = st.selectbox("Select ID column", columns)
+        id_column = st.selectbox("Select identifier column", columns)
         
         # Result columns selection
         numeric_columns = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
         
         # Select all toggle
-        select_all_results = st.checkbox("Select all numeric columns for results")
+        select_all_results = st.checkbox("Select all numeric columns for analysis")
         
         if select_all_results:
             result_columns = numeric_columns
-            st.info(f"Selected all {len(numeric_columns)} numeric columns for results")
+            st.info(f"Selected all {len(numeric_columns)} numeric columns for analysis")
         else:
             result_columns = st.multiselect(
-                "Select columns to calculate means for results", 
+                "Select columns for statistical calculations", 
                 numeric_columns,
-                default=numeric_columns[:5] if len(numeric_columns) > 5 else numeric_columns
+                default=[]
             )
 
         # Step 5: Run analysis
-        st.header("Run Combination Analysis")
+        st.markdown('<h2 class="section-header">Execute Analysis</h2>', unsafe_allow_html=True)
         st.markdown("---")
 
-        # Optional: add similarity/count columns
-        st.subheader("Optional: Add similarity/count columns")
-        compute_similarity = st.checkbox("Compute per-row similar counts and group sums")
-        similarity_group_cols = []
-        similarity_sum_cols = []
-
-        if compute_similarity:
-            similarity_group_cols = st.multiselect(
-                "Select columns to define similarity groups (rows identical on these columns are considered similar)",
-                options=columns,
-                default=[id_column] if id_column else []
-            )
-
-            numeric_opts = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
-            similarity_sum_cols = st.multiselect(
-                "Select numeric columns to compute group sums for",
-                options=numeric_opts,
-                default=numeric_opts[:3] if len(numeric_opts) > 0 else []
-            )
-
-            if st.button("Apply similarity columns"):
-                with st.spinner("Computing similarity columns..."):
-                    df = add_similarity_columns(df, similarity_group_cols, similarity_sum_cols)
-                st.success("Added similarity columns to DataFrame")
-                st.dataframe(df.head(50))
         
-        if st.button("Analyze All Combinations"):
+        if st.button("Run Combination Analysis", type="primary"):
             if thresholds and id_column and result_columns:
-                with st.spinner("Running analysis for all combinations..."):
+                with st.spinner("Processing data combinations..."):
                     results = analyze_data_combinations(df, selected_columns, thresholds, id_column, result_columns)
                     
-                st.subheader("Analysis Results")
+                st.markdown('<h3 style="color: #374151;">Result of Analysis</h3>', unsafe_allow_html=True)
                 st.dataframe(results)
 
                 # Step 6: Download results
                 if not results.empty:
-                    if st.button("📥 Download Results"):
+                    if st.button("Download Results", type="secondary"):
                         export_results(results)
-                        st.success("Results exported successfully!")
+                        st.success("Results exported successfully")
                 else:
-                    st.warning("No combinations produced results.")
+                    st.warning("No combinations produced results")
             else:
-                st.error("Please configure thresholds, select ID column, and select result columns.")
+                st.error("Please complete configuration: thresholds, identifier column, and result columns are required")
