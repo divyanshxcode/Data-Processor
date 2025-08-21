@@ -29,7 +29,6 @@ def is_date_column(df, column):
     return pd.api.types.is_datetime64_any_dtype(df[column])
 
 def analyze_data_combinations(df, selected_columns, thresholds, id_column, result_columns):
-
     results = []
     
     for combo_length in range(1, len(selected_columns) + 1):
@@ -77,6 +76,22 @@ def analyze_data_combinations(df, selected_columns, thresholds, id_column, resul
                         condition_variations.append([
                             (col, threshold_config["value"], '<')
                         ])
+                    elif threshold_config["type"] == "multiple_greater_than":
+                        # Create conditions for each greater than value
+                        multiple_greater_conditions = []
+                        for value in threshold_config["values"]:
+                            multiple_greater_conditions.append(
+                                (col, value, '>')
+                            )
+                        condition_variations.append(multiple_greater_conditions)
+                    elif threshold_config["type"] == "multiple_less_than":
+                        # Create conditions for each less than value
+                        multiple_less_conditions = []
+                        for value in threshold_config["values"]:
+                            multiple_less_conditions.append(
+                                (col, value, '<')
+                            )
+                        condition_variations.append(multiple_less_conditions)
                     else:  # mean, median, custom
                         # For traditional thresholds: both >= and < conditions
                         condition_variations.append([
@@ -175,7 +190,6 @@ def analyze_data_combinations(df, selected_columns, thresholds, id_column, resul
                             if not pd.isna(mean_value):
                                 result_row[f'{result_col}_Mean'] = round(mean_value, 4)
                             
-
                             # Calculate max run
                             max_run = calculate_max_run(filtered_df[result_col])
                             result_row[f'{result_col}_Max_Run'] = max_run
@@ -190,11 +204,10 @@ def analyze_data_combinations(df, selected_columns, thresholds, id_column, resul
                             if not pd.isna(count_value):
                                 result_row[f'{result_col}_Count'] = count_value
                             
-                            # Calculate variance
-                            var_value = filtered_df[result_col].var()
-                            if not pd.isna(var_value):
-                                result_row[f'{result_col}_Variance'] = round(var_value, 4)
-
+                            # Calculate standard deviation instead of variance
+                            std_value = filtered_df[result_col].std()
+                            if not pd.isna(std_value):
+                                result_row[f'{result_col}_Std_Dev'] = round(std_value, 4)
                     
                     # Add actual IDs (first 20 if more than 20)
                     ids = filtered_df[id_column].astype(str).tolist()

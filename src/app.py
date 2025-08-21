@@ -313,7 +313,6 @@ if uploaded_file:
                     # Threshold selection
                     threshold_type = st.selectbox(
                         f"Threshold method for {col}",
-
                         ["Mean", "Median", "Custom", "Greater Than", "Less Than", "Range"],
                         key=f"threshold_type_{col}"
                     )
@@ -324,11 +323,9 @@ if uploaded_file:
                         thresholds[col] = {"type": "mean", "value": threshold_value}
                     elif threshold_type == "Median":
                         threshold_value = col_data.median()
-
                         st.info(f"Threshold value: {threshold_value:.2f}")
                         thresholds[col] = {"type": "median", "value": threshold_value}
                     elif threshold_type == "Custom":
-
                         threshold_value = st.number_input(
                             f"Custom threshold for {col}",
                             min_value=float(col_data.min()),
@@ -339,25 +336,55 @@ if uploaded_file:
                         st.info(f"Threshold value: {threshold_value:.2f}")
                         thresholds[col] = {"type": "custom", "value": threshold_value}
                     elif threshold_type == "Greater Than":
-                        threshold_value = st.number_input(
-                            f"Greater than value for {col}",
-                            min_value=float(col_data.min()),
-                            max_value=float(col_data.max()),
-                            value=float(col_data.mean()),
-                            key=f"greater_than_{col}"
+                        # Allow user to input multiple greater than values
+                        num_thresholds = st.number_input(
+                            f"Number of 'greater than' thresholds for {col}",
+                            min_value=1,
+                            max_value=20,
+                            value=3,
+                            key=f"num_greater_than_{col}"
                         )
-                        st.info(f"Filter applied: > {threshold_value:.2f}")
-                        thresholds[col] = {"type": "greater_than", "value": threshold_value}
+                        
+                        greater_than_values = []
+                        for i in range(num_thresholds):
+                            value = st.number_input(
+                                f"Greater than threshold {i+1} for {col}",
+                                min_value=float(col_data.min()),
+                                max_value=float(col_data.max()),
+                                value=float(col_data.min() + (i+1) * (col_data.max() - col_data.min()) / (num_thresholds + 1)),
+                                key=f"multiple_greater_than_{col}_{i}"
+                            )
+                            greater_than_values.append(value)
+                        
+                        # Sort values to ensure proper ordering
+                        greater_than_values.sort()
+                        st.info(f"Greater than thresholds: {[f'>{val:.2f}' for val in greater_than_values]}")
+                        thresholds[col] = {"type": "multiple_greater_than", "values": greater_than_values}
                     elif threshold_type == "Less Than":
-                        threshold_value = st.number_input(
-                            f"Less than value for {col}",
-                            min_value=float(col_data.min()),
-                            max_value=float(col_data.max()),
-                            value=float(col_data.mean()),
-                            key=f"less_than_{col}"
+                        # Allow user to input multiple less than values
+                        num_thresholds = st.number_input(
+                            f"Number of 'less than' thresholds for {col}",
+                            min_value=1,
+                            max_value=20,
+                            value=3,
+                            key=f"num_less_than_{col}"
                         )
-                        st.info(f"Filter applied: < {threshold_value:.2f}")
-                        thresholds[col] = {"type": "less_than", "value": threshold_value}
+                        
+                        less_than_values = []
+                        for i in range(num_thresholds):
+                            value = st.number_input(
+                                f"Less than threshold {i+1} for {col}",
+                                min_value=float(col_data.min()),
+                                max_value=float(col_data.max()),
+                                value=float(col_data.min() + (i+1) * (col_data.max() - col_data.min()) / (num_thresholds + 1)),
+                                key=f"multiple_less_than_{col}_{i}"
+                            )
+                            less_than_values.append(value)
+                        
+                        # Sort values to ensure proper ordering
+                        less_than_values.sort()
+                        st.info(f"Less than thresholds: {[f'<{val:.2f}' for val in less_than_values]}")
+                        thresholds[col] = {"type": "multiple_less_than", "values": less_than_values}
                     else:  # Range
                         num_divisions = st.number_input(
                             f"Number of range divisions for {col}",
