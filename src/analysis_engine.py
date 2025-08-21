@@ -175,9 +175,26 @@ def analyze_data_combinations(df, selected_columns, thresholds, id_column, resul
                             if not pd.isna(mean_value):
                                 result_row[f'{result_col}_Mean'] = round(mean_value, 4)
                             
+
                             # Calculate max run
                             max_run = calculate_max_run(filtered_df[result_col])
                             result_row[f'{result_col}_Max_Run'] = max_run
+
+                            # Calculate sum
+                            sum_value = filtered_df[result_col].sum()
+                            if not pd.isna(sum_value):
+                                result_row[f'{result_col}_Sum'] = round(sum_value, 4)
+                            
+                            # Calculate count
+                            count_value = filtered_df[result_col].count()
+                            if not pd.isna(count_value):
+                                result_row[f'{result_col}_Count'] = count_value
+                            
+                            # Calculate variance
+                            var_value = filtered_df[result_col].var()
+                            if not pd.isna(var_value):
+                                result_row[f'{result_col}_Variance'] = round(var_value, 4)
+
                     
                     # Add actual IDs (first 20 if more than 20)
                     ids = filtered_df[id_column].astype(str).tolist()
