@@ -172,11 +172,11 @@ def get_auto_detected_date_formats(sample_values):
         "%m-%d-%Y",
         "%d.%m.%Y",
         "%Y.%m.%d",
-        "%d/%m/%y",
-        "%m/%d/%y",
+        "%d/%m/yy",
+        "%m/%d/yy",
         "%y/%m/%d",
-        "%d-%m-%y",
-        "%m-%d-%y",
+        "%d-%m-yy",
+        "%m-%d-yy",
         "%y-%m-%d",
         "%Y-%m-%d %H:%M:%S.%f",
         "%d/%m/%Y %H:%M:%S",
@@ -774,14 +774,14 @@ if uploaded_file:
                         with col4:
                             st.metric("Valid Dates", f"{len(valid_dates)}/{len(col_data)}")
                         
-                        # Date filtering options
-                        date_filter_type = st.selectbox(
-                            f"Date filter method for {col}",
-                            ["Range", "Before", "After", "On", "Last N Days", "Next N Days"],
-                            key=f"date_filter_type_{col}"
+                        # Date filtering method selection
+                        date_method = st.selectbox(
+                            f"Date filtering method for {col}",
+                            ["Single Range", "Multiple Ranges", "Before Dates", "After Dates", "On Dates", "Last N Days", "First N Days"],
+                            key=f"date_method_{col}"
                         )
                         
-                        if date_filter_type == "Range":
+                        if date_method == "Single Range":
                             col1, col2 = st.columns(2)
                             with col1:
                                 start_date = st.date_input(
@@ -789,7 +789,7 @@ if uploaded_file:
                                     value=min_date.date(),
                                     min_value=min_date.date(),
                                     max_value=max_date.date(),
-                                    key=f"start_date_{col}"
+                                    key=f"single_start_date_{col}"
                                 )
                             with col2:
                                 end_date = st.date_input(
@@ -797,11 +797,10 @@ if uploaded_file:
                                     value=max_date.date(),
                                     min_value=min_date.date(),
                                     max_value=max_date.date(),
-                                    key=f"end_date_{col}"
+                                    key=f"single_end_date_{col}"
                                 )
                             
                             if start_date <= end_date:
-                                # More robust date comparison
                                 try:
                                     if is_column_datetime_converted(df, col):
                                         filtered_count = len(df[(df[col].dt.date >= start_date) & 
@@ -809,113 +808,237 @@ if uploaded_file:
                                     else:
                                         filtered_count = len(df[(pd.to_datetime(df[col], errors='coerce').dt.date >= start_date) & 
                                                                (pd.to_datetime(df[col], errors='coerce').dt.date <= end_date)])
-                                    st.info(f"Selected range: {start_date} to {end_date} ({filtered_count} records)")
-                                    thresholds[col] = {
-                                        "type": "range", 
-                                        "start_date": start_date, 
-                                        "end_date": end_date
-                                    }
+                                    st.info(f"Range: {start_date} to {end_date} ({filtered_count} records)")
                                 except:
-                                    st.warning("Could not calculate filtered count. Date filtering may not work properly.")
-                                    thresholds[col] = {
-                                        "type": "range", 
-                                        "start_date": start_date, 
-                                        "end_date": end_date
-                                    }
+                                    st.info(f"Range: {start_date} to {end_date}")
+                                
+                                thresholds[col] = {
+                                    "type": "single_range",
+                                    "start_date": start_date,
+                                    "end_date": end_date
+                                }
                             else:
                                 st.error("Start date must be before or equal to end date")
                                 
-                        elif date_filter_type == "Before":
-                            selected_date = st.date_input(
-                                f"Before date for {col}",
-                                value=max_date.date(),
-                                min_value=min_date.date(),
-                                max_value=max_date.date(),
-                                key=f"before_date_{col}"
-                            )
-                            try:
-                                if is_column_datetime_converted(df, col):
-                                    filtered_count = len(df[df[col].dt.date < selected_date])
-                                else:
-                                    filtered_count = len(df[pd.to_datetime(df[col], errors='coerce').dt.date < selected_date])
-                                st.info(f"Filter: Before {selected_date} ({filtered_count} records)")
-                            except:
-                                st.info(f"Filter: Before {selected_date}")
-                            thresholds[col] = {"type": "before", "date": selected_date}
-                            
-                        elif date_filter_type == "After":
-                            selected_date = st.date_input(
-                                f"After date for {col}",
-                                value=min_date.date(),
-                                min_value=min_date.date(),
-                                max_value=max_date.date(),
-                                key=f"after_date_{col}"
-                            )
-                            try:
-                                if is_column_datetime_converted(df, col):
-                                    filtered_count = len(df[df[col].dt.date > selected_date])
-                                else:
-                                    filtered_count = len(df[pd.to_datetime(df[col], errors='coerce').dt.date > selected_date])
-                                st.info(f"Filter: After {selected_date} ({filtered_count} records)")
-                            except:
-                                st.info(f"Filter: After {selected_date}")
-                            thresholds[col] = {"type": "after", "date": selected_date}
-                            
-                        elif date_filter_type == "On":
-                            selected_date = st.date_input(
-                                f"On date for {col}",
-                                value=min_date.date(),
-                                min_value=min_date.date(),
-                                max_value=max_date.date(),
-                                key=f"on_date_{col}"
-                            )
-                            try:
-                                if is_column_datetime_converted(df, col):
-                                    filtered_count = len(df[df[col].dt.date == selected_date])
-                                else:
-                                    filtered_count = len(df[pd.to_datetime(df[col], errors='coerce').dt.date == selected_date])
-                                st.info(f"Filter: On {selected_date} ({filtered_count} records)")
-                            except:
-                                st.info(f"Filter: On {selected_date}")
-                            thresholds[col] = {"type": "on", "date": selected_date}
-                            
-                        elif date_filter_type == "Last N Days":
-                            n_days = st.number_input(
-                                f"Number of days from latest date for {col}",
+                        elif date_method == "Multiple Ranges":
+                            num_ranges = st.number_input(
+                                f"Number of date ranges for {col}",
                                 min_value=1,
-                                max_value=date_range.days,
-                                value=min(30, date_range.days),
-                                key=f"last_n_days_{col}"
+                                max_value=20,
+                                value=3,
+                                key=f"num_ranges_{col}"
                             )
-                            cutoff_date = max_date - pd.Timedelta(days=n_days)
-                            try:
-                                if is_column_datetime_converted(df, col):
-                                    filtered_count = len(df[df[col] >= cutoff_date])
-                                else:
-                                    filtered_count = len(df[pd.to_datetime(df[col], errors='coerce') >= cutoff_date])
-                                st.info(f"Filter: Last {n_days} days (from {cutoff_date.strftime('%Y-%m-%d')}) - {filtered_count} records")
-                            except:
-                                st.info(f"Filter: Last {n_days} days (from {cutoff_date.strftime('%Y-%m-%d')})")
-                            thresholds[col] = {"type": "last_n_days", "days": n_days, "cutoff_date": cutoff_date}
                             
-                        elif date_filter_type == "Next N Days":
-                            n_days = st.number_input(
-                                f"Number of days from earliest date for {col}",
-                                min_value=1,
-                                max_value=date_range.days,
-                                value=min(30, date_range.days),
-                                key=f"next_n_days_{col}"
-                            )
-                            cutoff_date = min_date + pd.Timedelta(days=n_days)
-                            try:
-                                if is_column_datetime_converted(df, col):
-                                    filtered_count = len(df[df[col] <= cutoff_date])
+                            ranges = []
+                            for i in range(num_ranges):
+                                st.write(f"**Range {i+1}:**")
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    start_date = st.date_input(
+                                        f"Start date",
+                                        value=min_date.date(),
+                                        min_value=min_date.date(),
+                                        max_value=max_date.date(),
+                                        key=f"multi_range_start_{col}_{i}"
+                                    )
+                                with col2:
+                                    end_date = st.date_input(
+                                        f"End date",
+                                        value=max_date.date(),
+                                        min_value=min_date.date(),
+                                        max_value=max_date.date(),
+                                        key=f"multi_range_end_{col}_{i}"
+                                    )
+                                
+                                if start_date <= end_date:
+                                    try:
+                                        if is_column_datetime_converted(df, col):
+                                            filtered_count = len(df[(df[col].dt.date >= start_date) & 
+                                                                   (df[col].dt.date <= end_date)])
+                                        else:
+                                            filtered_count = len(df[(pd.to_datetime(df[col], errors='coerce').dt.date >= start_date) & 
+                                                                   (pd.to_datetime(df[col], errors='coerce').dt.date <= end_date)])
+                                        st.info(f"{start_date} to {end_date} ({filtered_count} records)")
+                                    except:
+                                        st.info(f"{start_date} to {end_date}")
+                                    ranges.append({"start_date": start_date, "end_date": end_date})
                                 else:
-                                    filtered_count = len(df[pd.to_datetime(df[col], errors='coerce') <= cutoff_date])
-                                st.info(f"Filter: First {n_days} days (until {cutoff_date.strftime('%Y-%m-%d')}) - {filtered_count} records")
-                            except:
-                                st.info(f"Filter: First {n_days} days (until {cutoff_date.strftime('%Y-%m-%d')})")
-                            thresholds[col] = {"type": "next_n_days", "days": n_days, "cutoff_date": cutoff_date}
+                                    st.error(f"Range {i+1}: Start date must be before or equal to end date")
+                            
+                            if ranges:
+                                thresholds[col] = {
+                                    "type": "multiple_ranges",
+                                    "ranges": ranges
+                                }
+                                
+                        elif date_method == "Before Dates":
+                            num_dates = st.number_input(
+                                f"Number of 'before' dates for {col}",
+                                min_value=1,
+                                max_value=20,
+                                value=3,
+                                key=f"num_before_dates_{col}"
+                            )
+                            
+                            before_dates = []
+                            for i in range(num_dates):
+                                selected_date = st.date_input(
+                                    f"Before date {i+1}",
+                                    value=min_date.date() + pd.Timedelta(days=(i+1) * date_range.days // (num_dates + 1)),
+                                    min_value=min_date.date(),
+                                    max_value=max_date.date(),
+                                    key=f"before_date_{col}_{i}"
+                                )
+                                try:
+                                    if is_column_datetime_converted(df, col):
+                                        filtered_count = len(df[df[col].dt.date < selected_date])
+                                    else:
+                                        filtered_count = len(df[pd.to_datetime(df[col], errors='coerce').dt.date < selected_date])
+                                    st.info(f"Before {selected_date} ({filtered_count} records)")
+                                except:
+                                    st.info(f"Before {selected_date}")
+                                before_dates.append(selected_date)
+                            
+                            thresholds[col] = {
+                                "type": "multiple_before",
+                                "dates": before_dates
+                            }
+                            
+                        elif date_method == "After Dates":
+                            num_dates = st.number_input(
+                                f"Number of 'after' dates for {col}",
+                                min_value=1,
+                                max_value=20,
+                                value=3,
+                                key=f"num_after_dates_{col}"
+                            )
+                            
+                            after_dates = []
+                            for i in range(num_dates):
+                                selected_date = st.date_input(
+                                    f"After date {i+1}",
+                                    value=min_date.date() + pd.Timedelta(days=(i+1) * date_range.days // (num_dates + 1)),
+                                    min_value=min_date.date(),
+                                    max_value=max_date.date(),
+                                    key=f"after_date_{col}_{i}"
+                                )
+                                try:
+                                    if is_column_datetime_converted(df, col):
+                                        filtered_count = len(df[df[col].dt.date > selected_date])
+                                    else:
+                                        filtered_count = len(df[pd.to_datetime(df[col], errors='coerce').dt.date > selected_date])
+                                    st.info(f"After {selected_date} ({filtered_count} records)")
+                                except:
+                                    st.info(f"After {selected_date}")
+                                after_dates.append(selected_date)
+                            
+                            thresholds[col] = {
+                                "type": "multiple_after", 
+                                "dates": after_dates
+                            }
+                            
+                        elif date_method == "On Dates":
+                            num_dates = st.number_input(
+                                f"Number of specific dates for {col}",
+                                min_value=1,
+                                max_value=20,
+                                value=3,
+                                key=f"num_on_dates_{col}"
+                            )
+                            
+                            on_dates = []
+                            for i in range(num_dates):
+                                selected_date = st.date_input(
+                                    f"On date {i+1}",
+                                    value=min_date.date() + pd.Timedelta(days=(i+1) * date_range.days // (num_dates + 1)),
+                                    min_value=min_date.date(),
+                                    max_value=max_date.date(),
+                                    key=f"on_date_{col}_{i}"
+                                )
+                                try:
+                                    if is_column_datetime_converted(df, col):
+                                        filtered_count = len(df[df[col].dt.date == selected_date])
+                                    else:
+                                        filtered_count = len(df[pd.to_datetime(df[col], errors='coerce').dt.date == selected_date])
+                                    st.info(f"On {selected_date} ({filtered_count} records)")
+                                except:
+                                    st.info(f"On {selected_date}")
+                                on_dates.append(selected_date)
+                            
+                            thresholds[col] = {
+                                "type": "multiple_on",
+                                "dates": on_dates
+                            }
+                            
+                        elif date_method == "Last N Days":
+                            num_periods = st.number_input(
+                                f"Number of different 'last N days' periods for {col}",
+                                min_value=1,
+                                max_value=10,
+                                value=3,
+                                key=f"num_last_periods_{col}"
+                            )
+                            
+                            last_n_configs = []
+                            for i in range(num_periods):
+                                n_days = st.number_input(
+                                    f"Last N days period {i+1}",
+                                    min_value=1,
+                                    max_value=date_range.days,
+                                    value=min((i+1) * 30, date_range.days),
+                                    key=f"last_n_days_{col}_{i}"
+                                )
+                                cutoff_date = max_date - pd.Timedelta(days=n_days)
+                                try:
+                                    if is_column_datetime_converted(df, col):
+                                        filtered_count = len(df[df[col] >= cutoff_date])
+                                    else:
+                                        filtered_count = len(df[pd.to_datetime(df[col], errors='coerce') >= cutoff_date])
+                                    st.info(f"Last {n_days} days (from {cutoff_date.strftime('%Y-%m-%d')}) - {filtered_count} records")
+                                except:
+                                    st.info(f"Last {n_days} days (from {cutoff_date.strftime('%Y-%m-%d')})")
+                                
+                                last_n_configs.append({"days": n_days, "cutoff_date": cutoff_date})
+                            
+                            thresholds[col] = {
+                                "type": "multiple_last_n_days",
+                                "configs": last_n_configs
+                            }
+                            
+                        elif date_method == "First N Days":
+                            num_periods = st.number_input(
+                                f"Number of different 'first N days' periods for {col}",
+                                min_value=1,
+                                max_value=10,
+                                value=3,
+                                key=f"num_first_periods_{col}"
+                            )
+                            
+                            first_n_configs = []
+                            for i in range(num_periods):
+                                n_days = st.number_input(
+                                    f"First N days period {i+1}",
+                                    min_value=1,
+                                    max_value=date_range.days,
+                                    value=min((i+1) * 30, date_range.days),
+                                    key=f"first_n_days_{col}_{i}"
+                                )
+                                cutoff_date = min_date + pd.Timedelta(days=n_days)
+                                try:
+                                    if is_column_datetime_converted(df, col):
+                                        filtered_count = len(df[df[col] <= cutoff_date])
+                                    else:
+                                        filtered_count = len(df[pd.to_datetime(df[col], errors='coerce') <= cutoff_date])
+                                    st.info(f"First {n_days} days (until {cutoff_date.strftime('%Y-%m-%d')}) - {filtered_count} records")
+                                except:
+                                    st.info(f"First {n_days} days (until {cutoff_date.strftime('%Y-%m-%d')})")
+                                
+                                first_n_configs.append({"days": n_days, "cutoff_date": cutoff_date})
+                            
+                            thresholds[col] = {
+                                "type": "multiple_first_n_days",
+                                "configs": first_n_configs
+                            }
                     else:
                         st.warning(f"No valid dates found in column '{col}'. Please check date parsing configuration.")
                 
@@ -943,7 +1066,7 @@ if uploaded_file:
                     # Threshold selection
                     threshold_type = st.selectbox(
                         f"Threshold method for {col}",
-                        ["Mean", "Median", "Custom", "Greater Than", "Less Than", "Range"],
+                        ["Mean", "Median", "Custom", "Multiple Conditions (OR Logic)", "Range"],
                         key=f"threshold_type_{col}"
                     )
                     
@@ -965,56 +1088,86 @@ if uploaded_file:
                         )
                         st.info(f"Threshold value: {threshold_value:.2f}")
                         thresholds[col] = {"type": "custom", "value": threshold_value}
-                    elif threshold_type == "Greater Than":
-                        # Allow user to input multiple greater than values
-                        num_thresholds = st.number_input(
-                            f"Number of 'greater than' thresholds for {col}",
+                    elif threshold_type == "Multiple Conditions (OR Logic)":
+                        st.write("**Add multiple conditions (OR logic):**")
+                        
+                        num_conditions = st.number_input(
+                            f"Number of conditions for {col}",
                             min_value=1,
                             max_value=20,
-                            value=3,
-                            key=f"num_greater_than_{col}"
+                            value=2,
+                            key=f"num_conditions_{col}"
                         )
                         
-                        greater_than_values = []
-                        for i in range(num_thresholds):
-                            value = st.number_input(
-                                f"Greater than threshold {i+1} for {col}",
-                                min_value=float(col_data.min()),
-                                max_value=float(col_data.max()),
-                                value=float(col_data.min() + (i+1) * (col_data.max() - col_data.min()) / (num_thresholds + 1)),
-                                key=f"multiple_greater_than_{col}_{i}"
-                            )
-                            greater_than_values.append(value)
+                        conditions = []
+                        for i in range(num_conditions):
+                            st.write(f"**Condition {i+1}:**")
+                            col1, col2 = st.columns([1, 2])
+                            
+                            with col1:
+                                operator = st.selectbox(
+                                    f"Operator",
+                                    ["Greater than (>)", "Less than (<)", "Greater than or equal (>=)", "Less than or equal (<=)"],
+                                    key=f"operator_{col}_{i}"
+                                )
+                            
+                            with col2:
+                                value = st.number_input(
+                                    f"Value",
+                                    min_value=float(col_data.min()),
+                                    max_value=float(col_data.max()),
+                                    value=float(col_data.mean()),
+                                    key=f"condition_value_{col}_{i}"
+                                )
+                            
+                            # Convert operator to symbol
+                            operator_map = {
+                                "Greater than (>)": ">",
+                                "Less than (<)": "<", 
+                                "Greater than or equal (>=)": ">=",
+                                "Less than or equal (<=)": "<="
+                            }
+                            
+                            conditions.append({
+                                "operator": operator_map[operator],
+                                "value": value
+                            })
+                            
+                            # Show preview
+                            try:
+                                if operator_map[operator] == ">":
+                                    preview_count = len(col_data[col_data > value])
+                                elif operator_map[operator] == "<":
+                                    preview_count = len(col_data[col_data < value])
+                                elif operator_map[operator] == ">=":
+                                    preview_count = len(col_data[col_data >= value])
+                                elif operator_map[operator] == "<=":
+                                    preview_count = len(col_data[col_data <= value])
+                                
+                                st.info(f"{col} {operator_map[operator]} {value:.2f} → {preview_count} records")
+                            except:
+                                pass
                         
-                        # Sort values to ensure proper ordering
-                        greater_than_values.sort()
-                        st.info(f"Greater than thresholds: {[f'>{val:.2f}' for val in greater_than_values]}")
-                        thresholds[col] = {"type": "multiple_greater_than", "values": greater_than_values}
-                    elif threshold_type == "Less Than":
-                        # Allow user to input multiple less than values
-                        num_thresholds = st.number_input(
-                            f"Number of 'less than' thresholds for {col}",
-                            min_value=1,
-                            max_value=20,
-                            value=3,
-                            key=f"num_less_than_{col}"
-                        )
+                        # Show combined preview
+                        try:
+                            combined_mask = pd.Series([False] * len(col_data), index=col_data.index)
+                            for condition in conditions:
+                                if condition["operator"] == ">":
+                                    combined_mask |= (col_data > condition["value"])
+                                elif condition["operator"] == "<":
+                                    combined_mask |= (col_data < condition["value"])
+                                elif condition["operator"] == ">=":
+                                    combined_mask |= (col_data >= condition["value"])
+                                elif condition["operator"] == "<=":
+                                    combined_mask |= (col_data <= condition["value"])
+                            
+                            total_matching = combined_mask.sum()
+                            st.success(f"**Combined (OR logic): {total_matching} records match any condition**")
+                        except:
+                            pass
                         
-                        less_than_values = []
-                        for i in range(num_thresholds):
-                            value = st.number_input(
-                                f"Less than threshold {i+1} for {col}",
-                                min_value=float(col_data.min()),
-                                max_value=float(col_data.max()),
-                                value=float(col_data.min() + (i+1) * (col_data.max() - col_data.min()) / (num_thresholds + 1)),
-                                key=f"multiple_less_than_{col}_{i}"
-                            )
-                            less_than_values.append(value)
-                        
-                        # Sort values to ensure proper ordering
-                        less_than_values.sort()
-                        st.info(f"Less than thresholds: {[f'<{val:.2f}' for val in less_than_values]}")
-                        thresholds[col] = {"type": "multiple_less_than", "values": less_than_values}
+                        thresholds[col] = {"type": "multiple_conditions_or", "conditions": conditions}
+                    
                     else:  # Range
                         num_divisions = st.number_input(
                             f"Number of range divisions for {col}",
@@ -1146,21 +1299,46 @@ if uploaded_file:
         st.markdown('<h2 class="section-header">Execute Analysis</h2>', unsafe_allow_html=True)
         st.markdown("---")
 
+        # Add this after the result columns selection and before the analyze button
+        st.subheader("Analysis Settings")
+        min_matching_rows = st.number_input(
+            "Minimum Matching Rows Threshold",
+            min_value=1,
+            max_value=1000,
+            value=10,
+            step=1,
+            help="Filter out combinations with fewer than this many matching rows to focus on statistically relevant results"
+        )
         
-        if st.button("Run Combination Analysis", type="primary"):
-            if thresholds and id_column and result_columns:
-                with st.spinner("Processing data combinations..."):
-                    results = analyze_data_combinations(df, selected_columns, thresholds, id_column, result_columns)
-                    
-                st.markdown('<h3 style="color: #374151;">Result of Analysis</h3>', unsafe_allow_html=True)
-                st.dataframe(results)
-
-                # Step 6: Download results
-                if not results.empty:
-                    if st.button("Download Results", type="secondary"):
-                        export_results(results)
-                        st.success("Results exported successfully")
-                else:
-                    st.warning("No combinations produced results")
+        if st.button("Analyze Data Combinations", type="primary"):
+            if not selected_columns:
+                st.error("Please select at least one column for analysis")
+            elif not result_columns:
+                st.error("Please select at least one result column")
             else:
-                st.error("Please complete configuration: thresholds, identifier column, and result columns are required")
+                with st.spinner("Analyzing data combinations..."):
+                    try:
+                        # Pass the min_matching_rows parameter to the analysis function
+                        results = analyze_data_combinations(
+                            df, 
+                            selected_columns, 
+                            thresholds, 
+                            id_column, 
+                            result_columns,
+                            min_matching_rows=min_matching_rows
+                        )
+                        
+                        st.markdown('<h3 style="color: #374151;">Result of Analysis</h3>', unsafe_allow_html=True)
+                        st.dataframe(results)
+
+                        # Step 6: Download results
+                        if not results.empty:
+                            if st.button("Download Results", type="secondary"):
+                                export_results(results)
+                                st.success("Results exported successfully")
+                        else:
+                            st.warning("No combinations produced results")
+                    except Exception as e:
+                        st.error(f"Error during analysis: {str(e)}")
+        else:
+            st.info("Adjust settings and click 'Run Analysis' to view results")

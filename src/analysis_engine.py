@@ -40,10 +40,9 @@ def apply_date_filter(df, column, threshold_config):
     """Apply date filtering based on the threshold configuration"""
     col_data = pd.to_datetime(df[column], errors='coerce')
     
-    if threshold_config["type"] == "range":
+    if threshold_config["type"] == "single_range":
         start_date = pd.to_datetime(threshold_config["start_date"])
         end_date = pd.to_datetime(threshold_config["end_date"])
-        # Convert both sides to date for comparison
         mask = (col_data.dt.date >= start_date.date()) & (col_data.dt.date <= end_date.date())
         return df[mask]
         
@@ -67,45 +66,50 @@ def apply_date_filter(df, column, threshold_config):
         mask = col_data >= cutoff_date
         return df[mask]
         
-    elif threshold_config["type"] == "next_n_days":
+    elif threshold_config["type"] == "first_n_days":
         cutoff_date = pd.to_datetime(threshold_config["cutoff_date"])
         mask = col_data <= cutoff_date
         return df[mask]
     
     return df
 
-def generate_date_condition_description(column, threshold_config):
+def generate_date_condition_description(column, threshold_data, operator):
     """Generate human-readable description for date conditions"""
-    if threshold_config["type"] == "range":
-        start = pd.to_datetime(threshold_config["start_date"]).strftime('%Y-%m-%d')
-        end = pd.to_datetime(threshold_config["end_date"]).strftime('%Y-%m-%d')
+    if operator == 'single_range':
+        start = pd.to_datetime(threshold_data["start_date"]).strftime('%Y-%m-%d')
+        end = pd.to_datetime(threshold_data["end_date"]).strftime('%Y-%m-%d')
         return f"{column}: {start} to {end}"
         
-    elif threshold_config["type"] == "before":
-        date_str = pd.to_datetime(threshold_config["date"]).strftime('%Y-%m-%d')
+    elif operator == 'range':
+        start = pd.to_datetime(threshold_data["start_date"]).strftime('%Y-%m-%d')
+        end = pd.to_datetime(threshold_data["end_date"]).strftime('%Y-%m-%d')
+        return f"{column}: {start} to {end}"
+        
+    elif operator == 'before':
+        date_str = pd.to_datetime(threshold_data).strftime('%Y-%m-%d')
         return f"{column} before {date_str}"
         
-    elif threshold_config["type"] == "after":
-        date_str = pd.to_datetime(threshold_config["date"]).strftime('%Y-%m-%d')
+    elif operator == 'after':
+        date_str = pd.to_datetime(threshold_data).strftime('%Y-%m-%d')
         return f"{column} after {date_str}"
         
-    elif threshold_config["type"] == "on":
-        date_str = pd.to_datetime(threshold_config["date"]).strftime('%Y-%m-%d')
+    elif operator == 'on':
+        date_str = pd.to_datetime(threshold_data).strftime('%Y-%m-%d')
         return f"{column} on {date_str}"
         
-    elif threshold_config["type"] == "last_n_days":
-        days = threshold_config["days"]
-        cutoff = pd.to_datetime(threshold_config["cutoff_date"]).strftime('%Y-%m-%d')
+    elif operator == 'last_n_days':
+        days = threshold_data["days"]
+        cutoff = pd.to_datetime(threshold_data["cutoff_date"]).strftime('%Y-%m-%d')
         return f"{column} last {days} days (from {cutoff})"
         
-    elif threshold_config["type"] == "next_n_days":
-        days = threshold_config["days"]
-        cutoff = pd.to_datetime(threshold_config["cutoff_date"]).strftime('%Y-%m-%d')
+    elif operator == 'first_n_days':
+        days = threshold_data["days"]
+        cutoff = pd.to_datetime(threshold_data["cutoff_date"]).strftime('%Y-%m-%d')
         return f"{column} first {days} days (until {cutoff})"
     
     return f"{column}: unknown date filter"
 
-def analyze_data_combinations(df, selected_columns, thresholds, id_column, result_columns):
+def analyze_data_combinations(df, selected_columns, thresholds, id_column, result_columns, min_matching_rows=10):
     results = []
     
     for combo_length in range(1, len(selected_columns) + 1):
@@ -118,10 +122,39 @@ def analyze_data_combinations(df, selected_columns, thresholds, id_column, resul
                 threshold_config = thresholds[col]
                 
                 if is_date_column(df, col):
-                    # For date columns, we use the single configuration as is
-                    # since each date filter type creates one condition
-                    condition_variations.append([(col, threshold_config, 'date')])
-                        
+                    if threshold_config["type"] == "single_range":
+                        condition_variations.append([(col, threshold_config, 'single_range')])
+                    elif threshold_config["type"] == "multiple_ranges":
+                        range_conditions = []
+                        for range_config in threshold_config["ranges"]:
+                            range_conditions.append((col, range_config, 'range'))
+                        condition_variations.append(range_conditions)
+                    elif threshold_config["type"] == "multiple_before":
+                        before_conditions = []
+                        for date in threshold_config["dates"]:
+                            before_conditions.append((col, date, 'before'))
+                        condition_variations.append(before_conditions)
+                    elif threshold_config["type"] == "multiple_after":
+                        after_conditions = []
+                        for date in threshold_config["dates"]:
+                            after_conditions.append((col, date, 'after'))
+                        condition_variations.append(after_conditions)
+                    elif threshold_config["type"] == "multiple_on":
+                        on_conditions = []
+                        for date in threshold_config["dates"]:
+                            on_conditions.append((col, date, 'on'))
+                        condition_variations.append(on_conditions)
+                    elif threshold_config["type"] == "multiple_last_n_days":
+                        last_n_conditions = []
+                        for config in threshold_config["configs"]:
+                            last_n_conditions.append((col, config, 'last_n_days'))
+                        condition_variations.append(last_n_conditions)
+                    elif threshold_config["type"] == "multiple_first_n_days":
+                        first_n_conditions = []
+                        for config in threshold_config["configs"]:
+                            first_n_conditions.append((col, config, 'first_n_days'))
+                        condition_variations.append(first_n_conditions)
+
                 elif pd.api.types.is_numeric_dtype(df[col]):
                     if threshold_config["type"] == "range":
                         # For range: create conditions for each range
@@ -140,13 +173,30 @@ def analyze_data_combinations(df, selected_columns, thresholds, id_column, resul
                             )
                         condition_variations.append(multiple_greater_conditions)
                     elif threshold_config["type"] == "multiple_less_than":
-                        # Create conditions for each less than value
                         multiple_less_conditions = []
                         for value in threshold_config["values"]:
                             multiple_less_conditions.append(
                                 (col, value, '<')
                             )
                         condition_variations.append(multiple_less_conditions)
+                    elif threshold_config["type"] == "multiple_conditions_or":
+                        # Create individual conditions AND the combined OR condition
+                        individual_conditions = []
+                        for condition in threshold_config["conditions"]:
+                            # Each individual condition as a single tuple
+                            individual_conditions.append(
+                                (col, condition["value"], condition["operator"])
+                            )
+                        
+                        # Add the combined OR condition as well (as a list of tuples)
+                        or_condition_group = []
+                        for condition in threshold_config["conditions"]:
+                            or_condition_group.append(
+                                (col, condition["value"], condition["operator"])
+                            )
+                        individual_conditions.append(or_condition_group)
+                        
+                        condition_variations.append(individual_conditions)
                     else:  # mean, median, custom
                         # For traditional thresholds: both >= and < conditions
                         condition_variations.append([
@@ -176,12 +226,77 @@ def analyze_data_combinations(df, selected_columns, thresholds, id_column, resul
                 
                 # Apply each condition
                 valid_filter = True
-                for col, threshold_data, operator in condition_set:
-                    if is_date_column(df, col):
-                        # Handle date filtering using the new date filter function
-                        filtered_df = apply_date_filter(filtered_df, col, threshold_data)
-                        applied_conditions[col] = generate_date_condition_description(col, threshold_data)
+                for condition_item in condition_set:
+                    # Handle OR logic conditions (list of conditions)
+                    if isinstance(condition_item, list) and len(condition_item) > 0 and isinstance(condition_item[0], tuple):
+                        # This is an OR condition group
+                        col = condition_item[0][0]  # Get column from first condition
+                        
+                        if pd.api.types.is_numeric_dtype(df[col]):
+                            # Handle multiple conditions with OR logic
+                            or_mask = pd.Series([False] * len(filtered_df), index=filtered_df.index)
+                            condition_descriptions = []
                             
+                            for sub_col, sub_value, sub_operator in condition_item:
+                                if sub_operator == '>':
+                                    or_mask |= (filtered_df[sub_col] > sub_value)
+                                    condition_descriptions.append(f"{sub_col} > {sub_value:.2f}")
+                                elif sub_operator == '<':
+                                    or_mask |= (filtered_df[sub_col] < sub_value)
+                                    condition_descriptions.append(f"{sub_col} < {sub_value:.2f}")
+                                elif sub_operator == '>=':
+                                    or_mask |= (filtered_df[sub_col] >= sub_value)
+                                    condition_descriptions.append(f"{sub_col} >= {sub_value:.2f}")
+                                elif sub_operator == '<=':
+                                    or_mask |= (filtered_df[sub_col] <= sub_value)
+                                    condition_descriptions.append(f"{sub_col} <= {sub_value:.2f}")
+                            
+                            filtered_df = filtered_df[or_mask]
+                            applied_conditions[col] = f"({' OR '.join(condition_descriptions)})"
+                        continue
+                    
+                    # Handle regular conditions (single tuple)
+                    col, threshold_data, operator = condition_item
+                    
+                    if is_date_column(df, col):
+                        if operator == 'single_range':
+                            filtered_df = apply_date_filter(filtered_df, col, threshold_data)
+                            applied_conditions[col] = generate_date_condition_description(col, threshold_data, operator)
+                        elif operator == 'range':
+                            # Apply range filtering
+                            start_date = pd.to_datetime(threshold_data["start_date"])
+                            end_date = pd.to_datetime(threshold_data["end_date"])
+                            col_data = pd.to_datetime(filtered_df[col], errors='coerce')
+                            mask = (col_data.dt.date >= start_date.date()) & (col_data.dt.date <= end_date.date())
+                            filtered_df = filtered_df[mask]
+                            applied_conditions[col] = generate_date_condition_description(col, threshold_data, operator)
+                        elif operator in ['before', 'after', 'on']:
+                            # Apply single date filtering
+                            col_data = pd.to_datetime(filtered_df[col], errors='coerce')
+                            target_date = pd.to_datetime(threshold_data)
+                            
+                            if operator == 'before':
+                                mask = col_data.dt.date < target_date.date()
+                            elif operator == 'after':
+                                mask = col_data.dt.date > target_date.date()
+                            elif operator == 'on':
+                                mask = col_data.dt.date == target_date.date()
+                                
+                            filtered_df = filtered_df[mask]
+                            applied_conditions[col] = generate_date_condition_description(col, threshold_data, operator)
+                        elif operator in ['last_n_days', 'first_n_days']:
+                            # Apply N days filtering
+                            col_data = pd.to_datetime(filtered_df[col], errors='coerce')
+                            cutoff_date = pd.to_datetime(threshold_data["cutoff_date"])
+                            
+                            if operator == 'last_n_days':
+                                mask = col_data >= cutoff_date
+                            elif operator == 'first_n_days':
+                                mask = col_data <= cutoff_date
+                                
+                            filtered_df = filtered_df[mask]
+                            applied_conditions[col] = generate_date_condition_description(col, threshold_data, operator)
+
                     elif pd.api.types.is_numeric_dtype(df[col]):
                         if operator == 'range':
                             start = threshold_data["start"]
@@ -196,7 +311,9 @@ def analyze_data_combinations(df, selected_columns, thresholds, id_column, resul
                             else:
                                 filtered_df = filtered_df[(filtered_df[col] >= start) & (filtered_df[col] < end)]
                                 applied_conditions[col] = f"{col}: [{start:.2f} to {end:.2f})"
-                                
+                        elif isinstance(operator, list):
+                            # This should not happen anymore as OR logic is handled above
+                            pass
                         elif operator == '>=':
                             filtered_df = filtered_df[filtered_df[col] >= threshold_data]
                             applied_conditions[col] = f"{col} >= {threshold_data:.2f}"
@@ -222,11 +339,16 @@ def analyze_data_combinations(df, selected_columns, thresholds, id_column, resul
                 
                 # Calculate result if filter is valid and data remains
                 if valid_filter and not filtered_df.empty:
+                    # Check minimum matching rows threshold
+                    matching_rows = len(filtered_df)
+                    if matching_rows < min_matching_rows:
+                        continue  # Skip this combination as it doesn't meet minimum threshold
+                    
                     # Create result row with condition columns first
                     result_row = applied_conditions.copy()
                     
                     # Add matching rows count
-                    result_row['Matching_Rows'] = len(filtered_df)
+                    result_row['Matching_Rows'] = matching_rows
                     
                     # Calculate statistics for selected result columns
                     for result_col in result_columns:
@@ -307,3 +429,7 @@ def apply_single_condition(df, column, threshold_config, operator):
             return df[~df[column].isin(threshold_config)]
     
     return df
+
+# 1. minimum matching rows threshold
+# 2. Date for testing and validation
+# 3. greater than, less than, AND OR logic
