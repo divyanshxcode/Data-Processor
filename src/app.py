@@ -1240,16 +1240,15 @@ if uploaded_file:
                             thresholds[col] = {"type": "categorical", "value_groups": []}
                     
                     elif selection_method == "Select All Values":
-                        # Use all unique values
+                        # Use all unique values - ONLY as individual groups, no combining
                         value_groups = []
                         # Each value as individual group
                         for value in unique_values:
                             value_groups.append([value])
-                        # All values together as one group
-                        value_groups.append(unique_values.tolist())
+                        # Remove this line: value_groups.append(unique_values.tolist())
                         
                         thresholds[col] = {"type": "categorical", "value_groups": value_groups}
-                        st.info(f"Analyzing all {len(unique_values)} values individually and combined")
+                        st.info(f"Analyzing all {len(unique_values)} values individually")
                     
                     else:  # Select Top N Values
                         top_n = st.number_input(
@@ -1264,12 +1263,10 @@ if uploaded_file:
                         st.info(f"Selected top {top_n} values: {top_values}")
                         
                         value_groups = []
-                        # Each top value as individual group
+                        # Each top value as individual group - no combining
                         for value in top_values:
                             value_groups.append([value])
-                        # All top values together as one group
-                        if len(top_values) > 1:
-                            value_groups.append(top_values)
+                        # Remove this: if len(top_values) > 1: value_groups.append(top_values)
                         
                         thresholds[col] = {"type": "categorical", "value_groups": value_groups}
 

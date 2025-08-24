@@ -430,6 +430,3 @@ def apply_single_condition(df, column, threshold_config, operator):
     
     return df
 
-# 1. minimum matching rows threshold
-# 2. Date for testing and validation
-# 3. greater than, less than, AND OR logic
